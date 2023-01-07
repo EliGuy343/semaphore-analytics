@@ -4,12 +4,12 @@ from firebase_admin import credentials
 from firebase_admin import firestore
 import pandas as pd
 import json
-import requests
 import nltk
 import string
-import re
-import os
 from collections import Counter
+from transformers import pipeline
+from flask import request
+sentiment_pipeline = pipeline("sentiment-analysis")
 
 flask_app = Flask(__name__)
 stop_words = ["a", "an","I","i", "the", "this", "that", "it", "is", "really", "to", "and", "for", "these", "those"] + list(string.punctuation)
@@ -19,39 +19,34 @@ cred = credentials.Certificate("semaphore-a7fd1-firebase-adminsdk-dyeb3-e430d943
 app = firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-@flask_app.route('/max/user')
+@flask_app.route('/total')
 def max_posts_user():
-    doc_ref = db.collection(u'posts')
-    docs = doc_ref.stream()
+    posts_ref = db.collection(u'posts')
+    user_ref = db.collection(u'users')
+
     posts = []
-    comments = []
-    for doc in docs:
-        comments_ref = db.collection(u'posts').document(doc.id).collection('comments')
-
-        for comment in comments_ref.stream():
-            comments.append(comment.to_dict())
-
+    users = []
+    for doc in posts_ref.stream():
         posts.append(doc.to_dict())
+        
+    for doc in user_ref.stream():
+        users.append(doc.to_dict())
+    
 
     posts_df = pd.DataFrame(posts)
     posts_df_grouped = posts_df.groupby("username")["text"].count()
     max_user = posts_df_grouped.idxmax()
     max_amount = posts_df_grouped.max()
     
-    comments_df = pd.DataFrame(comments)
-    comments_df_grouped = comments_df.groupby("username")["comment"].count()
-    max_user_comments = comments_df_grouped.idxmax()
-    max_amount_comments = comments_df_grouped.max()
 
-    result ={
-        "max_posts":{
+    result = {
+        "max_posts":
+        {
             "user": max_user,
             "max_posts": max_amount
         },
-        "max_comments":{
-            "user": max_user_comments,
-            "max_comments": max_amount_comments
-        }
+        "Total_posts": len(posts),
+        "total_users": len(users)
     }
     result_json = json.dumps(result)
     return result_json
@@ -62,7 +57,6 @@ def trending_words():
     doc_ref = db.collection(u'posts')
     docs = doc_ref.stream()
     posts = []
-    comments = []
     for doc in docs:
         posts.append(doc.to_dict())
 
@@ -81,6 +75,22 @@ def trending_words():
 
     return result_json
     
+@flask_app.route('/sentiment')
+def sentiment_analysis():
+    search_word = request.args.get("search")
+    
+    doc_ref = db.collection(u'posts')
+    docs = doc_ref.stream()
+    posts = []
+    for doc in docs:
+        posts.append(doc.to_dict())
+
+    posts_df = pd.DataFrame(posts)
+    posts_search = posts_df[posts_df.text.str.contains(search_word)]
+    posts_list = posts_search['text'].values.tolist()
+    result = sentiment_pipeline(posts_list)
+    result_json = json.dumps(result)
+    return result_json
 
 if __name__ == "__main__":
     flask_app.run(debug=True)
