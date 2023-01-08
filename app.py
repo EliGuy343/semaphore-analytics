@@ -7,19 +7,21 @@ import json
 import nltk
 import string
 from collections import Counter
-from transformers import pipeline
 from flask import request
-sentiment_pipeline = pipeline("sentiment-analysis")
 
-flask_app = Flask(__name__)
+from nltk.sentiment import SentimentIntensityAnalyzer
+sia = SentimentIntensityAnalyzer()
+
+
+app = Flask(__name__)
 stop_words = ["a", "an","I","i", "the", "this", "that", "it", "is", "really", "to", "and", "for", "these", "those"] + list(string.punctuation)
 
 
 cred = credentials.Certificate("semaphore-a7fd1-firebase-adminsdk-dyeb3-e430d9430a.json")
-app = firebase_admin.initialize_app(cred)
+fb_admin = firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-@flask_app.route('/total')
+@app.route('/total')
 def max_posts_user():
     posts_ref = db.collection(u'posts')
     user_ref = db.collection(u'users')
@@ -43,16 +45,16 @@ def max_posts_user():
         "max_posts":
         {
             "user": max_user,
-            "max_posts": max_amount
+            "max_posts":int(max_amount)
         },
-        "Total_posts": len(posts),
-        "total_users": len(users)
+        "Total_posts": int(len(posts)),
+        "total_users": int(len(users))
     }
     result_json = json.dumps(result)
     return result_json
 
 
-@flask_app.route('/trending/top5')
+@app.route('/trending/top5')
 def trending_words():
     doc_ref = db.collection(u'posts')
     docs = doc_ref.stream()
@@ -75,9 +77,11 @@ def trending_words():
 
     return result_json
     
-@flask_app.route('/sentiment')
+@app.route('/sentiment')
 def sentiment_analysis():
-    search_word = request.args.get("search")
+    search_word = ""
+    if(request.args.get("search")):
+        search_word = request.args.get("search")
     
     doc_ref = db.collection(u'posts')
     docs = doc_ref.stream()
@@ -88,9 +92,11 @@ def sentiment_analysis():
     posts_df = pd.DataFrame(posts)
     posts_search = posts_df[posts_df.text.str.contains(search_word)]
     posts_list = posts_search['text'].values.tolist()
-    result = sentiment_pipeline(posts_list)
-    result_json = json.dumps(result)
+    result = map(lambda x: sia.polarity_scores(x), posts_list)
+    result_list = list(result)
+    result_json = json.dumps(result_list)
+
     return result_json
 
 if __name__ == "__main__":
-    flask_app.run(debug=True)
+    app.run(debug=True)
