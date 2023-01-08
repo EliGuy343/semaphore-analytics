@@ -8,12 +8,15 @@ import nltk
 import string
 from collections import Counter
 from flask import request
+from flask_cors import CORS
 
 from nltk.sentiment import SentimentIntensityAnalyzer
 sia = SentimentIntensityAnalyzer()
 
 
 app = Flask(__name__)
+CORS(app)
+
 stop_words = ["a", "an","I","i", "the", "this", "that", "it", "is", "really", "to", "and", "for", "these", "those"] + list(string.punctuation)
 
 
