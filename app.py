@@ -25,37 +25,43 @@ fb_admin = firebase_admin.initialize_app(cred)
 db = firestore.client()
 
 @app.route('/total')
-def max_posts_user():
+def max_posts_users():
     posts_ref = db.collection(u'posts')
     user_ref = db.collection(u'users')
 
     posts = []
     users = []
+
     for doc in posts_ref.stream():
         posts.append(doc.to_dict())
         
     for doc in user_ref.stream():
         users.append(doc.to_dict())
-    
-
-    posts_df = pd.DataFrame(posts)
-    posts_df_grouped = posts_df.groupby("username")["text"].count()
-    max_user = posts_df_grouped.idxmax()
-    max_amount = posts_df_grouped.max()
-    
 
     result = {
-        "max_posts":
-        {
-            "user": max_user,
-            "max_posts":int(max_amount)
-        },
-        "Total_posts": int(len(posts)),
-        "total_users": int(len(users))
+        "totalPosts": int(len(posts)),
+        "TotalUsers": int(len(users))
     }
     result_json = json.dumps(result)
     return result_json
 
+@app.route('/active')
+def most_active():
+    posts_ref = db.collection(u'posts')
+    posts = []
+
+    for doc in posts_ref.stream():
+        posts.append(doc.to_dict())
+
+    posts_df = pd.DataFrame(posts)
+    posts_df_grouped = posts_df.groupby("username")["text"].count()
+    max_posts = posts_df_grouped.nlargest(3).to_dict()
+    result = {
+        "mostActivePosters": max_posts
+    }
+    result_json = json.dumps(result)
+    return result_json
+    
 
 @app.route('/trending/top5')
 def trending_words():
